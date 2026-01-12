@@ -80,11 +80,13 @@ ggsave(filename = file.path(plots_dir, "combined/combined_feature_rna_mt.png"),
 
 # filter out
 combined_pre_count <- ncol(combined)
-combined <- subset(combined, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+combined <- subset(combined, subset = nFeature_RNA > 3500 & percent.mt < 15)
+# originally filtered by nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5
 combined_pre_count - ncol(combined)
 
 # normalizing data
 combined <- NormalizeData(combined, normalization.method = "LogNormalize", scale.factor = 10000)
+# above normalization is the default params
 
 #feature selection
 combined <- FindVariableFeatures(combined, selection.method = "vst", nFeatures = 2000)
@@ -100,4 +102,54 @@ ggsave(filename = file.path(plots_dir, "combined/std_var_features_plt.png"),
        width = 15,
        dpi = 300)
 
+# scale data
+all.genes <- rownames(combined)
+combined <- ScaleData(combined, features = all.genes)
 
+#PCA
+combined <- RunPCA(combined, features = VariableFeatures(object = combined))
+pca_viz_plt <- VizDimLoadings(combined, dims = 1:3, reduction = "pca")
+ggsave(filename = "outputs/plots/combined/pca_viz_plt.png",
+       plot = pca_viz_plt,
+       height = 10,
+       width = 10,
+       dpi = 300)
+combined_pca <- DimPlot(combined, reduction = "pca") + NoLegend()
+ggsave(filename = "outputs/plots/combined/pca_dim.png",
+       plot = combined_pca,
+       height = 10,
+       width = 10,
+       dpi = 300)
+
+png("outputs/plots/combined/pca_dim_heatmap.png", width = 20, height = 10, units = "in", res = 300)
+DimHeatmap(combined, dims = 1:3, cells = 500, balanced = TRUE)
+dev.off()
+
+#find dimensionality of dataset
+elbow_plot <- ElbowPlot(combined)
+ggsave(filename = "outputs/plots/combined/elbow.png",
+       plot = elbow_plot,
+       height = 10,
+       width = 10,
+       dpi = 300,
+       bg = "white")
+
+#cluster cells
+
+combined <- FindNeighbors(combined, dims = 1:10)
+combined <- FindClusters(combined, resolution = 0.5)
+head(Idents(combined), 5)
+
+combined <- RunUMAP(combined, dims = 1:10)
+cluster_condition_plot <- DimPlot(combined, reduction = "umap", group.by = "condition") # we group by condition to get the dose cluster
+cluster_default_plot <- DimPlot(combined, reduction = "umap", label = TRUE)
+ggsave(filename = "outputs/plots/combined/cluster_condition.png",
+       plot = cluster_condition_plot,
+       height = 5,
+       width = 5,
+       dpi = 300)
+ggsave(filename = "outputs/plots/combined/cluster_default.png",
+       plot = cluster_default_plot,
+       height = 8,
+       width = 8,
+       dpi = 300)
