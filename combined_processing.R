@@ -93,3 +93,11 @@ top10 <- head(VariableFeatures(combined), 10)
 std_var_features_plt <- VariableFeaturePlot(combined)
 labeled_feature_plt <- LabelPoints(plot = std_var_features_plt, points = top10, repel = TRUE)
 std_var_features_plt + labeled_feature_plt
+
+ggsave(filename = file.path(plots_dir, "combined/std_var_features_plt.png"),
+       plot = std_var_features_plt + labeled_feature_plt ,
+       height = 10,
+       width = 15,
+       dpi = 300)
+
+
