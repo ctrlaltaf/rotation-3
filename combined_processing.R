@@ -59,6 +59,9 @@ combined <- merge(
 combined
 table(combined$condition)
 
+rm(etop_10, etop_10.data, etop_2_5, etop_2_5.data, etop_25, etop_25.data, untreated, untreated.data)
+gc()
+
 #mitochondrial qc
 combined[["percent.mt"]] <- PercentageFeatureSet(combined, patter = "^MT-")
 vln_rna_mt_plt <- VlnPlot(combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
@@ -85,11 +88,11 @@ combined <- subset(combined, subset = nFeature_RNA > 3500 & percent.mt < 15)
 combined_pre_count - ncol(combined)
 
 # normalizing data
-combined <- NormalizeData(combined, normalization.method = "LogNormalize", scale.factor = 10000)
+combined <- NormalizeData(combined)
 # above normalization is the default params
 
 #feature selection
-combined <- FindVariableFeatures(combined, selection.method = "vst", nFeatures = 2000)
+combined <- FindVariableFeatures(combined)
 top10 <- head(VariableFeatures(combined), 10)
 
 std_var_features_plt <- VariableFeaturePlot(combined)
@@ -102,9 +105,11 @@ ggsave(filename = file.path(plots_dir, "combined/std_var_features_plt.png"),
        width = 15,
        dpi = 300)
 
+gc()
 # scale data
-all.genes <- rownames(combined)
-combined <- ScaleData(combined, features = all.genes)
+combined <- ScaleData(combined)
+combined <- ScaleData(combined, features = VariableFeatures(combined)) #just scale a set of the features not all
+mem.maxVSize()
 
 #PCA
 combined <- RunPCA(combined, features = VariableFeatures(object = combined))
@@ -126,7 +131,7 @@ DimHeatmap(combined, dims = 1:3, cells = 500, balanced = TRUE)
 dev.off()
 
 #find dimensionality of dataset
-elbow_plot <- ElbowPlot(combined)
+elbow_plot <- ElbowPlot(combined, ndims = 50)
 ggsave(filename = "outputs/plots/combined/elbow.png",
        plot = elbow_plot,
        height = 10,
@@ -134,22 +139,77 @@ ggsave(filename = "outputs/plots/combined/elbow.png",
        dpi = 300,
        bg = "white")
 
+#calculation from ref script
+pct <- combined[["pca"]]@stdev / sum(combined[["pca"]]@stdev) * 100
+
+# Calculate cumulative percents for each PC
+cumu <- cumsum(pct)
+
+# Determine which PC exhibits cumulative percent greater than 90% and % variation associated with the PC as less than 5
+co1 <- which(cumu > 90 & pct < 5)[1]
+
+co1
+
+co3 <- which(cumu > 80)[1]
+
+co3
+
+
+# Determine the difference between variation of PC and subsequent PC
+co2 <- sort(which((pct[1:length(pct) - 1] - pct[2:length(pct)]) > 0.1), decreasing = T)[1] + 1
+
+# last point where change of % of variation is more than 0.1%.
+co2
+
+# Minimum of the two calculation
+pcs <- min(co1, co2)
+
+pcs
+
+
 #cluster cells
 
-combined <- FindNeighbors(combined, dims = 1:10)
-combined <- FindClusters(combined, resolution = 0.5)
+combined <- FindNeighbors(combined, dims = 1:30) # set originally at 10.
+combined <- FindClusters(combined, resolution = 0.8) #originally 0.5
 head(Idents(combined), 5)
 
-combined <- RunUMAP(combined, dims = 1:10)
-cluster_condition_plot <- DimPlot(combined, reduction = "umap", group.by = "condition") # we group by condition to get the dose cluster
-cluster_default_plot <- DimPlot(combined, reduction = "umap", label = TRUE)
+combined <- RunUMAP(combined, dims = 1:30)
+combined <- RunTSNE(combined)
+
+cluster_colors <- c(
+  "untreated" = "#F37B6F",
+  "etop_2.5uM" = "#7BB438",
+  "etop_10uM" = "#30C1BF",
+  "etop_25uM" = "#CA79FB"
+)
+
+
+cluster_condition_plot <- DimPlot(combined, reduction = "umap", group.by = "condition", pt.size = 0.5, label.size = 9, cols = cluster_colors) +
+  theme(
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16)
+  )
+# we group by condition to get the dose cluster
+
+cluster_default_plot <- DimPlot(combined, reduction = "umap", label = TRUE, pt.size = 0.5, label.size = 9) +
+  theme(
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16)
+  )
+cluster_final <- cluster_condition_plot + cluster_default_plot
 ggsave(filename = "outputs/plots/combined/cluster_condition.png",
        plot = cluster_condition_plot,
-       height = 5,
-       width = 5,
+       height = 10,
+       width = 10,
        dpi = 300)
 ggsave(filename = "outputs/plots/combined/cluster_default.png",
        plot = cluster_default_plot,
        height = 8,
        width = 8,
        dpi = 300)
+ggsave(filename = "outputs/plots/combined/cluster_final.png",
+       plot = cluster_final,
+       height = 10,
+       width = 20,
+       dpi = 300)
+
