@@ -167,6 +167,21 @@ pcs <- min(co1, co2)
 pcs
 
 
+# add cell phase data
+
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+
+combined <- CellCycleScoring(combined, s.features = s.genes, g2m.features = g2m.genes, set.ident =  TRUE)
+head(combined@meta.data[, c("S.Score", "G2M.Score","Phase")])
+table(combined$Phase)
+
+phase_colors <- c(
+  "G1"  = "#f8766d",
+  "S"   = "#00ba37",
+  "G2M" = "#609dff"
+)
+
 #cluster cells
 
 combined <- FindNeighbors(combined, dims = 1:30) # set originally at 10.
@@ -191,12 +206,26 @@ cluster_condition_plot <- DimPlot(combined, reduction = "umap", group.by = "cond
   )
 # we group by condition to get the dose cluster
 
-cluster_default_plot <- DimPlot(combined, reduction = "umap", label = TRUE, pt.size = 0.5, label.size = 9) +
+cluster_default_plot <- DimPlot(combined, reduction = "umap", label = TRUE, pt.size = 0.5, label.size = 9, group.by = "seurat_clusters") +
   theme(
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 16)
   )
-cluster_final <- cluster_condition_plot + cluster_default_plot
+
+cluster_phase_plot <- DimPlot(
+  combined,
+  reduction = "umap",
+  group.by = "Phase",
+  pt.size = 0.5,
+  cols = phase_colors
+) +
+  theme(
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16)
+  )
+
+
+cluster_final <- cluster_condition_plot + cluster_phase_plot +  cluster_default_plot
 ggsave(filename = "outputs/plots/combined/cluster_condition.png",
        plot = cluster_condition_plot,
        height = 10,
@@ -204,12 +233,19 @@ ggsave(filename = "outputs/plots/combined/cluster_condition.png",
        dpi = 300)
 ggsave(filename = "outputs/plots/combined/cluster_default.png",
        plot = cluster_default_plot,
-       height = 8,
-       width = 8,
+       height = 10,
+       width = 10,
+       dpi = 300)
+ggsave("outputs/plots/combined/umap_cellcycle_phase.png",
+       plot = cluster_phase_plot, 
+       width = 10, 
+       height = 10, 
        dpi = 300)
 ggsave(filename = "outputs/plots/combined/cluster_final.png",
        plot = cluster_final,
        height = 10,
-       width = 20,
+       width = 30,
        dpi = 300)
+
+
 
