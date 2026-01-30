@@ -199,53 +199,87 @@ cluster_colors <- c(
 )
 
 
-cluster_condition_plot <- DimPlot(combined, reduction = "umap", group.by = "condition", pt.size = 0.5, label.size = 9, cols = cluster_colors) +
-  theme(
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16)
-  )
-# we group by condition to get the dose cluster
+TITLE_SIZE      <- 22
+AXIS_TITLE_SIZE <- 22
+AXIS_TEXT_SIZE  <- 25
+LEGEND_TITLE_SIZE <- 22
+LEGEND_TEXT_SIZE  <- 22
+CLUSTER_LABEL_SIZE <- 12
 
-cluster_default_plot <- DimPlot(combined, reduction = "umap", label = TRUE, pt.size = 0.5, label.size = 9, group.by = "seurat_clusters") +
-  theme(
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16)
-  )
+umap_theme <- theme(
+  plot.title  = element_text(size = TITLE_SIZE, face = "bold"),
+  axis.title  = element_text(size = AXIS_TITLE_SIZE),
+  axis.text   = element_text(size = AXIS_TEXT_SIZE),
+  legend.title = element_text(size = LEGEND_TITLE_SIZE),
+  legend.text  = element_text(size = LEGEND_TEXT_SIZE)
+)
+
+legend_bigger_points <- guides(color = guide_legend(override.aes = list(size = 4)))
+
+cluster_condition_plot <- DimPlot(
+  combined,
+  reduction = "umap",
+  group.by = "condition",
+  pt.size = 0.5,
+  label = FALSE,
+  label.size = CLUSTER_LABEL_SIZE,
+  cols = cluster_colors
+) +
+  ggtitle("UMAP by Condition") +
+  legend_bigger_points +
+  umap_theme
+
+cluster_default_plot <- DimPlot(
+  combined,
+  reduction = "umap",
+  group.by = "seurat_clusters",
+  pt.size = 0.5,
+  label = TRUE,
+  label.size = CLUSTER_LABEL_SIZE
+) +
+  ggtitle("UMAP by Seurat Clusters") +
+  legend_bigger_points +
+  umap_theme
 
 cluster_phase_plot <- DimPlot(
   combined,
   reduction = "umap",
   group.by = "Phase",
   pt.size = 0.5,
+  label = FALSE,
+  label.size = CLUSTER_LABEL_SIZE,
   cols = phase_colors
 ) +
-  theme(
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16)
-  )
+  ggtitle("UMAP by Cell Cycle Phase") +
+  legend_bigger_points +
+  umap_theme
 
+# Patchwork combine (3 panels)
+cluster_final <- cluster_condition_plot + cluster_phase_plot + cluster_default_plot
 
-cluster_final <- cluster_condition_plot + cluster_phase_plot +  cluster_default_plot
-ggsave(filename = "outputs/plots/combined/cluster_condition.png",
-       plot = cluster_condition_plot,
-       height = 10,
-       width = 10,
-       dpi = 300)
-ggsave(filename = "outputs/plots/combined/cluster_default.png",
-       plot = cluster_default_plot,
-       height = 10,
-       width = 10,
-       dpi = 300)
-ggsave("outputs/plots/combined/umap_cellcycle_phase.png",
-       plot = cluster_phase_plot, 
-       width = 10, 
-       height = 10, 
-       dpi = 300)
-ggsave(filename = "outputs/plots/combined/cluster_final.png",
-       plot = cluster_final,
-       height = 10,
-       width = 30,
-       dpi = 300)
+ggsave(
+  filename = "outputs/plots/combined/cluster_condition.png",
+  plot = cluster_condition_plot,
+  height = 10, width = 10, dpi = 300
+)
 
+ggsave(
+  filename = "outputs/plots/combined/cluster_default.png",
+  plot = cluster_default_plot,
+  height = 10, width = 10, dpi = 300
+)
 
+ggsave(
+  filename = "outputs/plots/combined/umap_cellcycle_phase.png",
+  plot = cluster_phase_plot,
+  height = 10, width = 10, dpi = 300
+)
+
+ggsave(
+  filename = "outputs/plots/combined/cluster_final.png",
+  plot = cluster_final,
+  height = 10, width = 30, dpi = 300
+)
+
+saveRDS(combined, file = "combined.rds")
 

@@ -1,4 +1,83 @@
-.Rproj.user
+# ======================
+# R / RStudio
+# ======================
+
 .Rhistory
+.Rapp.history
 .RData
 .Ruserdata
+.Rproj.user/
+*.Rproj
+.DS_Store
+.RDataTmp*
+outputs/plots/
+# ======================
+# RStudio cache & temp
+# ======================
+
+.Rcache/
+.Rtmp/
+
+# ======================
+# knitr / rmarkdown
+# ======================
+
+*_cache/
+*.utf8.md
+*.knit.md
+
+# ======================
+# Data files (large / generated)
+# ======================
+
+*.rds
+*.Rds
+*.Rdata
+*.csv
+*.tsv
+*.feather
+*.parquet
+*.h5
+*.hdf5
+
+# If you want to keep small example data, comment these out selectively.
+
+# ======================
+# Plots / figures / outputs
+# ======================
+
+outputs/
+plots/
+figures/
+*.png
+*.pdf
+*.svg
+
+# ======================
+# Logs
+# ======================
+
+*.log
+
+# ======================
+# OS / Editor junk
+# ======================
+
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ======================
+# Conda / virtualenv (if used)
+# ======================
+
+.env/
+venv/
+env/
+*.conda
+
+# ======================
+# Git LFS leftovers
+# ======================
+.git/lfs/tmp/
