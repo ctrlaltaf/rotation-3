@@ -7,11 +7,13 @@ library(ggplot2)
 library(patchwork)
 library(readxl)
 library(ggrepel)
+library(janitor)
 
 
 # look at the cluster that we are interested in
 merged_seurat_filtered <- readRDS("/Users/altafbarelvi/Code/rotation-3/merged_seurat_filtered.rds")
-# saveRDS(merged_seurat_filtered, file = "/Volumes/spencer_group/Rotation Students/Altaf/merged_seurat_filtered.rds")
+saveRDS(merged_seurat_filtered, file = "/Volumes/spencer_group/Rotation Students/Altaf/merged_seurat_filtered.rds")
+saveRDS(untreated_all, file = "/Volumes/spencer_group/Rotation Students/Altaf/untreated_all.rds")
 
 colnames(merged_seurat_filtered@meta.data)
 
@@ -370,7 +372,7 @@ file.exists(gsea_output_file)
 # make volcano plots for each cluster of interest
 
 p_volcano_5 <- plot_volcano_from_de_workbook(
-  de_xlsx_path = de_output_file,
+  de_de_output_file = de_output_file,
   cluster_id   = 5,
   sheet_prefix = "Cluster_",
   padj_thresh  = 0.05,
@@ -392,7 +394,7 @@ ggsave(filename = "outputs/plots/subset/volcano_5.png",
 
 
 p_volcano_6 <- plot_volcano_from_de_workbook(
-  de_xlsx_path = de_output_file,
+  de_de_output_file = de_output_file,
   cluster_id   = 6,
   sheet_prefix = "Cluster_",
   padj_thresh  = 0.05,
@@ -412,7 +414,7 @@ ggsave(filename = "outputs/plots/subset/volcano_6.png",
 
 
 p_volcano_7 <- plot_volcano_from_de_workbook(
-  de_xlsx_path = de_output_file,
+  de_de_output_file = de_output_file,
   cluster_id   = 7,
   sheet_prefix = "Cluster_",
   padj_thresh  = 0.05,
@@ -435,9 +437,9 @@ ggsave(filename = "outputs/plots/subset/volcano_7.png",
 
 # feature plot the top genes
 
-de_top_feature_c_5 <- FeaturePlot(untreated_all, features = de_top_genes_c_5)
-de_top_feature_c_6 <- FeaturePlot(untreated_all, features = de_top_genes_c_6)
-de_top_feature_c_7 <- FeaturePlot(untreated_all, features = de_top_genes_c_7)
+de_top_feature_c_5 <- FeaturePlot(untreated_all, features = de_top_genes_c_5, min.cutoff = "q2", max.cutoff =  "q98")
+de_top_feature_c_6 <- FeaturePlot(untreated_all, features = de_top_genes_c_6, min.cutoff = "q2", max.cutoff =  "q98")
+de_top_feature_c_7 <- FeaturePlot(untreated_all, features = de_top_genes_c_7, min.cutoff = "q2", max.cutoff =  "q98")
 
 ggsave(filename = "outputs/plots/subset/de_top_feature_c_5.png",
        plot = de_top_feature_c_5,
@@ -459,7 +461,7 @@ ggsave(filename = "outputs/plots/subset/de_top_feature_c_7.png",
 )
 
 gsea_plots_c_5 <- plot_gsea_dotplot_from_workbook(
-  gsea_xlsx_path = gsea_output_file,
+  gsea_de_output_file = gsea_output_file,
   cluster_id     = 5,
   sheet_prefix   = "Cluster_",
   which          = c("GO_BP", "Hallmark"),
@@ -476,7 +478,7 @@ ggsave(filename = "outputs/plots/subset/gsea_c_5.png",
 
 
 gsea_plots_c_6 <- plot_gsea_dotplot_from_workbook(
-  gsea_xlsx_path = gsea_output_file,
+  gsea_de_output_file = gsea_output_file,
   cluster_id     = 6,
   sheet_prefix   = "Cluster_",
   which          = c("GO_BP", "Hallmark"),
@@ -492,7 +494,7 @@ ggsave(filename = "outputs/plots/subset/gsea_c_6.png",
        dpi = 300)
 
 gsea_plots_c_7 <- plot_gsea_dotplot_from_workbook(
-  gsea_xlsx_path = gsea_output_file,
+  gsea_de_output_file = gsea_output_file,
   cluster_id     = 7,
   sheet_prefix   = "Cluster_",
   which          = c("GO_BP", "Hallmark"),
@@ -507,3 +509,248 @@ ggsave(filename = "outputs/plots/subset/gsea_c_7.png",
        height = 10,
        dpi = 300)
 
+
+
+
+# investigate p21
+
+gene_interest <-"CDKN1A"
+p21_df <- FetchData(
+  object = untreated_all,
+  vars   = c(gene_interest, "seurat_clusters"),
+  layer   = "data"
+)
+
+p21_df %>%
+  group_by(seurat_clusters) %>%
+  summarise(
+    n = n(),
+    mean_expr   = mean(.data[[gene_interest]]),
+    median_expr = median(.data[[gene_interest]]),
+    pct_expr    = mean(.data[[gene_interest]] > 0) * 100
+  ) %>%
+  arrange(as.integer(as.character(seurat_clusters)))
+
+expr_by_cluster <- split(p21_df[[gene_interest]], p21_df$seurat_clusters)
+
+expr_by_cluster[["3"]][1:10]
+
+
+avg <- AverageExpression(
+  object   = p21_df,
+  assays   = DefaultAssay(p21_df),
+  features = gene_interest,
+  slot     = "data",
+  group.by = "seurat_clusters"
+)
+
+# look at the top and bottom genes and their feature plot
+
+
+top_n <- 100                 # how many "top" genes per cluster
+bottom_n <- 100              # how many "bottom" genes per cluster
+padj_cutoff <- 0.05         # used only if an adjusted p-value column exists
+require_significant <- TRUE # if FALSE, will ignore padj cutoff
+# -----------------------
+
+# Helper: find first matching column from a set of candidates
+pick_col <- function(df, candidates) {
+  hits <- intersect(names(df), candidates)
+  if (length(hits) == 0) return(NA_character_)
+  hits[[1]]
+}
+
+# Common column name variants (after clean_names())
+gene_candidates <- c("gene", "genes", "feature", "features", "symbol", "gene_symbol")
+logfc_candidates <- c("avg_log2fc", "avg_logfc", "log2fc", "logfc", "avg_log_2fc", "avg_log_2_fc")
+padj_candidates <- c("p_val_adj", "p_adj", "padj", "p_val_adj_x", "p_val_adj_y", "p_adjust", "pvalue_adj", "p_val_adj_1")
+
+# Read sheet names (each should correspond to a cluster)
+sheets <- readxl::excel_sheets(de_output_file)
+if (length(sheets) == 0) stop("No sheets found in workbook: ", de_output_file)
+
+message("Found ", length(sheets), " sheet(s): ", paste(sheets, collapse = ", "))
+
+# Containers
+cluster_outputs <- list()
+all_top <- list()
+all_bottom <- list()
+
+for (sh in sheets) {
+  message("\n--- Processing sheet: ", sh, " ---")
+  
+  df_raw <- tryCatch(
+    readxl::read_xlsx(de_output_file, sheet = sh),
+    error = function(e) {
+      message("FAILED reading sheet: ", sh)
+      message("Reason: ", e$message)
+      return(NULL)
+    }
+  )
+  
+  if (is.null(df_raw)) next
+  if (nrow(df_raw) == 0) {
+    message("  (empty sheet; skipping)")
+    next
+  }
+  
+  df_raw <- readxl::read_xlsx(de_output_file, sheet = sh)
+  if (nrow(df_raw) == 0) {
+    message("  (empty sheet; skipping)")
+    next
+  }
+  
+  # Clean names and keep a copy of original names if you want to inspect
+  df <- janitor::clean_names(df_raw)
+  
+  # Some Seurat exports store gene names as rownames; try to recover if needed
+  # If there is no obvious gene column, we’ll use first column if it looks like gene symbols.
+  gene_col <- pick_col(df, gene_candidates)
+  
+  if (is.na(gene_col)) {
+    # fallback: if first column is character-ish, treat it as gene
+    first_col <- names(df)[1]
+    if (is.character(df[[first_col]]) || is.factor(df[[first_col]])) {
+      gene_col <- first_col
+      message("  Using first column as gene column: ", gene_col)
+    } else {
+      stop("Could not identify gene column in sheet '", sh, "'. Columns: ",
+           paste(names(df), collapse = ", "))
+    }
+  }
+  
+  logfc_col <- pick_col(df, logfc_candidates)
+  if (is.na(logfc_col)) {
+    stop("Could not identify logFC/log2FC column in sheet '", sh, "'. Columns: ",
+         paste(names(df), collapse = ", "))
+  }
+  
+  padj_col <- pick_col(df, padj_candidates)
+  
+  # Basic cleaning: drop rows with missing gene or logFC
+  df2 <- df %>%
+    mutate(
+      gene = as.character(.data[[gene_col]]),
+      logfc = suppressWarnings(as.numeric(.data[[logfc_col]]))
+    ) %>%
+    filter(!is.na(gene), gene != "", !is.na(logfc))
+  
+  # Apply significance filter if possible/desired
+  if (!is.na(padj_col)) {
+    df2 <- df2 %>%
+      mutate(p_adj = suppressWarnings(as.numeric(.data[[padj_col]])))
+    if (require_significant) {
+      df2 <- df2 %>% filter(!is.na(p_adj), p_adj <= padj_cutoff)
+      message("  Using adjusted p-value filter: ", padj_col, " <= ", padj_cutoff)
+    } else {
+      message("  Adjusted p-value column found (", padj_col, "), but filter disabled.")
+    }
+  } else {
+    message("  No adjusted p-value column found; ranking purely by logFC.")
+  }
+  
+  if (nrow(df2) == 0) {
+    message("  No rows left after filtering; skipping output for this sheet.")
+    next
+  }
+  
+  # Top upregulated and bottom downregulated
+  top_tbl <- df2 %>%
+    arrange(desc(logfc)) %>%
+    slice_head(n = top_n) %>%
+    mutate(cluster = sh, direction = "top_up")
+  
+  bottom_tbl <- df2 %>%
+    arrange(logfc) %>%
+    slice_head(n = bottom_n) %>%
+    mutate(cluster = sh, direction = "bottom_down")
+  
+  # Save combined per-cluster table (keep original columns too)
+  # We'll bind top and bottom, but also keep gene/logfc/p_adj if present.
+  keep_cols <- c("cluster", "direction", "gene", "logfc")
+  if ("p_adj" %in% names(top_tbl)) keep_cols <- c(keep_cols, "p_adj")
+  
+  per_cluster <- bind_rows(top_tbl, bottom_tbl) %>%
+    dplyr::select(any_of(keep_cols), everything())
+  
+  cluster_outputs[[sh]] <- per_cluster
+  
+  all_top[[sh]] <- top_tbl
+  all_bottom[[sh]] <- bottom_tbl
+  
+  message("  Kept ", nrow(per_cluster), " rows (top ", min(top_n, nrow(top_tbl)),
+          " + bottom ", min(bottom_n, nrow(bottom_tbl)), ")")
+}
+
+
+top_df <- bind_rows(all_top) %>% dplyr::select(cluster, gene, logfc, any_of("p_adj"), everything())
+bottom_df <- bind_rows(all_bottom) %>% dplyr::select(cluster, gene, logfc, any_of("p_adj"), everything())
+
+
+clusters <- c("Cluster_5", "Cluster_6", "Cluster_7")
+
+
+for (c in clusters) {
+  
+  top_cluster_subset <- top_df %>%
+    filter(cluster == c)
+  
+  bottom_cluster_subset <- bottom_df %>%
+    filter(cluster == c)
+  
+  top_feature <- FeaturePlot(untreated_all, features = top_cluster_subset$gene,  min.cutoff = "q2", max.cutoff =  "q98")
+  top_output_name <- paste0("outputs/plots/subset/", c, "_top_gene_features.pdf")
+  
+  ggsave(
+    filename = top_output_name,
+    plot     = top_feature,
+    width    = 20,
+    height   = 100,
+    units    = "in",
+    useDingbats = FALSE,
+    limitsize = FALSE
+  )
+  
+  bottom_feature <- FeaturePlot(untreated_all, features = bottom_cluster_subset$gene, min.cutoff = "q2", max.cutoff =  "q98")
+  bottom_output_name <- paste0("outputs/plots/subset/", c, "_bottom_gene_features.pdf")
+  
+  ggsave(
+    filename = bottom_output_name,
+    plot     = bottom_feature,
+    width    = 20,
+    height   = 100,
+    units    = "in",
+    useDingbats = FALSE,
+    limitsize = FALSE
+  )
+}
+
+# combine potential marker genes for each cluster
+
+c_5_markers <- c("IGFL2-AS1","DKK1", "S100P", "DCN","CFB", "FAT2", "CLCA2")
+
+c_6_markers <- c("PYCARD", "KRT14", "SOX5","TGM1", "ESRP1")
+
+c_7_markers <- c("CHI3L1", "FEZ1", "MME", "TACC2")
+
+c_6_7_markers <- c("PARVB", "BST2", "GLDC")
+
+all_markers <- c(
+  c_5_markers,
+  c_6_markers,
+  c_7_markers,
+  c_6_7_markers
+)
+
+potential_markers <- FeaturePlot(untreated_all, features = all_markers, min.cutoff = "q2", max.cutoff =  "q98")
+ggsave(
+  filename = "outputs/plots/subset/potential_markers_feature_plt.pdf",
+  plot     = potential_markers,
+  width    = 30,
+  height   = 30,
+  units    = "in",
+  useDingbats = FALSE,
+  limitsize = FALSE
+)
+
+print(all_markers)
