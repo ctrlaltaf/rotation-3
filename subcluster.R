@@ -12,8 +12,8 @@ library(janitor)
 
 # look at the cluster that we are interested in
 merged_seurat_filtered <- readRDS("/Users/altafbarelvi/Code/rotation-3/merged_seurat_filtered.rds")
-saveRDS(merged_seurat_filtered, file = "/Volumes/spencer_group/Rotation Students/Altaf/merged_seurat_filtered.rds")
-saveRDS(untreated_all, file = "/Volumes/spencer_group/Rotation Students/Altaf/untreated_all.rds")
+#saveRDS(merged_seurat_filtered, file = "/Volumes/spencer_group/Rotation Students/Altaf/merged_seurat_filtered.rds")
+#saveRDS(untreated_all, file = "/Volumes/spencer_group/Rotation Students/Altaf/untreated_all.rds")
 
 colnames(merged_seurat_filtered@meta.data)
 
@@ -727,7 +727,7 @@ for (c in clusters) {
 
 # combine potential marker genes for each cluster
 
-c_5_markers <- c("IGFL2-AS1","DKK1", "S100P", "DCN","CFB", "FAT2", "CLCA2")
+c_5_markers <- c("IGFL2-AS1","DKK1", "S100P", "DCN","CFB", "FAT2", "CLCA2", "CDKN1C", "S100A4", "MUC1", "CACNA2D3")
 
 c_6_markers <- c("PYCARD", "KRT14", "SOX5","TGM1", "ESRP1")
 
@@ -754,3 +754,152 @@ ggsave(
 )
 
 print(all_markers)
+
+p53_family_features <- FeaturePlot(untreated_all, features = c("TP53", "TP73", "TP63"))
+
+ggsave(filename = "outputs/plots/subset/p53_family_feature.png",
+       plot = p53_family_features,
+       width = 14,
+       height = 10,
+       dpi = 300)
+
+gcn2geneslist <- c("CHAC1", "SLC3A2", "HSPA5", "DDIT3", "XBP1", "ATF3", "ATF4", "ATF6", "CEBPA", "CEBPB", "CEBPD",
+                   "CEBPG", "CEBPZ", "NFE2L2", "JUN", "FOS", "TRIB3", "ASNS", "SESN2", "SLC7A5", "PSAT1",
+                   "PHGDH", "VLDLR", "GCN1", "EIF2AK4", "EIF2S1", "PPP1R15A")
+
+gcn2_list_features <- FeaturePlot(untreated_all, features = gcn2geneslist,  min.cutoff = "q2", max.cutoff =  "q98")
+
+ggsave(filename = "outputs/plots/subset/gcn2_list_feature.pdf",
+       plot = gcn2_list_features,
+       width    = 30,
+       height   = 40,
+       units    = "in",
+       limitsize = FALSE,
+       useDingbats = FALSE
+       )
+
+# pairwise clustering analysis 
+
+ut_subset_clusters <- c("5", "6", "7")
+ut_main_clusters <- c("0", "1")
+
+for (i in ut_main_clusters){
+  for (j in ut_subset_clusters) {
+    output_de_name <- paste("cluster_", i,"-",j,"_pair.xlsx", sep = "")
+    de_pairwise_path <- run_de_pairwise_findmarkers(
+      seurat_obj = untreated_all,
+      group_by = "seurat_clusters",           # metadata column that defines groups
+      group_1 = j,            # label in obj@meta.data$Treatment
+      group_2 = i,                  # label in obj@meta.data$Treatment
+      assay = "RNA",
+      slot = "data",
+      test_use = "wilcox",
+      min_pct = 0.1,
+      logfc_threshold = 0.25,
+      only_pos = FALSE,
+      out_de_xlsx = output_de_name,
+      out_dir = "outputs/gsea/pairwise_de"
+    )
+    
+    output_gsea_name <- paste("cluster_", i,"-",j,"_pair.xlsx", sep = "")
+    gsea_out <- gsea_from_de_workbook_fgsea(
+      de_xlsx_path = paste("outputs/gsea/pairwise_de/", output_de_name, sep = ""),
+      out_gsea_xlsx = output_gsea_name,
+      out_dir = "outputs/gsea/pairwise_gsea",
+      species = "Homo sapiens",
+      seed = 1
+    )
+    
+    gsea_plots <- plot_gsea_dotplot_from_workbook(
+      gsea_xlsx_path = paste("outputs/gsea/pairwise_gsea/", output_gsea_name, sep = ""),
+      sheet = paste(j, "_vs_", i, sep = ""),
+      which = c("GO_BP", "Hallmark"),
+      top_n_each = 15,
+      title_prefix = paste("Cluster", j, "vs", i)
+    )
+    
+    go_bp_output <- paste("outputs/plots/subset/gsea/go_bp_cluster_", i, "-", j,".png", sep = "")
+    hallmark_output <- paste("outputs/plots/subset/gsea/hallmark_cluster_", i, "-", j,".png", sep = "")
+    
+    ggsave(go_bp_output, gsea_plots$GO_BP, width = 20, height = 8, dpi = 300)
+    ggsave(hallmark_output, gsea_plots$Hallmark, width = 20, height = 8, dpi = 300)
+    
+  }
+}
+
+# merge cluster 0 and 1 together
+
+untreated_01_merged <- untreated_all
+
+old <- as.integer(as.character(untreated_01_merged$seurat_clusters))
+
+new <- ifelse(old %in% c(0, 1), 0L, old - 1L)
+
+# store as factor with clean levels 0..K
+new <- factor(new, levels = sort(unique(new)))
+
+# save into metadata (so it’s persistent in the new object)
+untreated_01_merged$seurat_clusters <- new
+
+# set active identities to these clusters
+Idents(untreated_01_merged) <- "seurat_clusters"
+
+# sanity check
+table(old = untreated_all$seurat_clusters, new = untreated_01_merged$seurat_clusters)
+
+DimPlot(untreated_01_merged, reduction = 'umap', pt.size = .01, shuffle = TRUE, label = TRUE, label.size = 9) + 
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank(), axis.line = element_blank()) + 
+  xlim(-8, 8) + ylim(-8, 8) +
+  labs(title = NULL, x = NULL, y = NULL)
+
+
+ut_subset_clusters <- c("4", "5", "6")
+ut_main_clusters <- c("0")
+
+for (i in ut_main_clusters){
+  for (j in ut_subset_clusters) {
+    output_name <- paste("cluster_", i,"-",j,"_pair_merged_main_ut.xlsx", sep = "")
+    de_pairwise_path <- run_de_pairwise_findmarkers(
+      seurat_obj = untreated_01_merged,
+      group_by = "seurat_clusters",           # metadata column that defines groups
+      group_1 = j,            # label in obj@meta.data$Treatment
+      group_2 = i,                  # label in obj@meta.data$Treatment
+      assay = "RNA",
+      slot = "data",
+      test_use = "wilcox",
+      min_pct = 0.1,
+      logfc_threshold = 0.25,
+      only_pos = FALSE,
+      out_de_xlsx = output_name,
+      out_dir = "outputs/gsea/pairwise_de/"
+    )
+    
+    gsea_output_name <- paste("cluster_", i, "-", j, "_pair_merged_main_GSEA.xlsx", sep = "")
+    gsea_out <- gsea_from_de_workbook_fgsea(
+      de_xlsx_path = paste("outputs/gsea/pairwise_de/", output_name, sep = ""),
+      out_gsea_xlsx = gsea_output_name,
+      out_dir = "outputs/gsea/pairwise_gsea",
+      species = "Homo sapiens",
+      seed = 1
+    )
+    
+    gsea_plots <- plot_gsea_dotplot_from_workbook(
+      gsea_xlsx_path = paste("outputs/gsea/pairwise_gsea/", gsea_output_name, sep = ""),
+      sheet = paste(j, "_vs_", i, sep = ""),
+      which = c("GO_BP", "Hallmark"),
+      top_n_each = 15,
+      title_prefix = paste("Cluster", j, "vs", i)
+    )
+    
+    go_bp_output <- paste("outputs/plots/subset/gsea/go_bp_cluster_", i, "-", j,"merged_main",".png", sep = "")
+    hallmark_output <- paste("outputs/plots/subset/gsea/hallmark_cluster_", i, "-", j,"merged_main",".png", sep = "")
+    
+    ggsave(go_bp_output, gsea_plots$GO_BP, width = 20, height = 8, dpi = 300)
+    ggsave(hallmark_output, gsea_plots$Hallmark, width = 20, height = 8, dpi = 300)
+    
+  }
+}
+
+
+
